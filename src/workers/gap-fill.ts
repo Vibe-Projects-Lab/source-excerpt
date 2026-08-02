@@ -1,16 +1,17 @@
-// Gap-fill: fetch [watermark, now) for each affected instrument through the
-// budgeted REST dispatcher and feed the CLOSED bars into the SAME idempotent
-// write path the live stream uses — persist stream, then worker, then an insert
-// that does nothing on conflict. Re-running is a no-op by construction, which
-// is what makes it safe to trigger this generously.
+// Detecting a hole in stored history and repairing it.
 //
-// And it is triggered generously: at adapter start, on EVERY in-place
-// WebSocket reconnect, on connection reassignment, and whenever the persist
-// worker notices a watermark lagging. A socket that went away is assumed to
-// have cost us bars until proven otherwise.
+// Fetch from the watermark forward through the budgeted request queue, and feed
+// the closed bars into the same write path the live stream uses — which ends in
+// an insert that does nothing on conflict. Re-running is therefore a no-op by
+// construction, and that is what makes it safe to trigger generously.
 //
-// Instruments with NO watermark are skipped: an instrument with no history at
-// all is the bulk backfill's job, not this one's.
+// And it is triggered generously: at startup, on every reconnect, on every
+// connection reassignment, and whenever the writer notices a watermark falling
+// behind. A socket that went away is assumed to have cost us bars until proven
+// otherwise.
+//
+// Instruments with no watermark at all are skipped. An instrument with no
+// history is the bulk backfill's problem, not this one's.
 import type { Redis } from 'ioredis';
 import type { Counter } from 'prom-client';
 import { PERSIST_STREAM, persistEntryToFields, watermarkKey } from '../core/persist.js';
@@ -52,7 +53,7 @@ export interface GapFillTarget {
    * watermark-lag request: the stale watermark the persist-worker saw).
    * Without it, a live close that lands before this sweep reaches the
    * instrument advances the watermark PAST the hole and the gap-fill no-ops
-   * — the exact bug the 1E kill test exposed (28/442 healed).
+   * — the failure a kill test exposed, where most instruments went unhealed.
    */
   sinceMs?: number;
   /**
@@ -61,7 +62,8 @@ export interface GapFillTarget {
    * exposed the hole). Bars fetched: (sinceMs, untilMs) exclusive on both
    * ends. Without the bound, a past-hole cursor would walk since → now and
    * re-fetch days per instrument — the exact mechanism that produced the
-   * 6M-bar / ~97%-duplicate start heal. Absent = heal to the live
+   * start-up heal that re-fetched years of history to write almost nothing new.
+   * Absent = heal to the live
    * edge (reconnect / adapter-start / stale-poll semantics, unchanged).
    */
   untilMs?: number;
@@ -109,14 +111,14 @@ async function gapFillOne(
     const gapMinutes = Math.ceil((sizeEdge - cursor) / 60_000);
     // Deep-history paging: once this window's START is older than the
     // venue's deep-history horizon, the adapter serves it from the deeper endpoint
-    // whose page cap is SMALLER (OKX: 100 vs 300). Size the window to that cap so
+    // whose page cap is SMALLER. Size the window to that cap so
     // the request never over-reaches the page and strands the window's oldest bars
     // — the exact silent-hole class the endMs windowing itself closes.
     const dh = deps.adapter.cfg.deepHistory;
     const maxLimit =
       dh && cursor < now - dh.horizonMs ? dh.maxLimit : deps.adapter.cfg.klinesMaxLimit;
     const limit = Math.max(10, Math.min(maxLimit, gapMinutes + 5));
-    // : bound EACH page as a half-open window [cursor,
+    // Bound EACH page as a half-open window [cursor,
     // windowEnd) via endMs, so a venue that paginates NEWEST-first can't return
     // only the newest page and strand older bars in a multi-page gap. endMs is
     // the INCLUSIVE last-bar openTime of this page (unified adapter convention:

@@ -1,6 +1,7 @@
-// Pause-share: the message-application seam, tested without Redis (the
-// wiring is a subscribe + a callback; what must be RIGHT is routing by budget
-// unit and surviving garbage on a best-effort channel).
+// The message-application seam, tested without a message bus. The wiring is a
+// subscription and a callback; what has to be right is routing a pause to the
+// dispatchers it applies to, and surviving malformed input on a best-effort
+// channel.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RestDispatcher } from './dispatcher.js';
 import { applyRestPauseMessage, encodeRestPause } from './pause-share.js';

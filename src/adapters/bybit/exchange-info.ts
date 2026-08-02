@@ -1,12 +1,13 @@
-// Bybit v5 instruments-info dialect → venue-neutral VenueSymbol[] (Rule 3).
-// R1-pinned facts: lotSizeFilter KEY NAMES DIFFER per category (spot:
-// minOrderQty/maxOrderQty/minOrderAmt/maxMarketOrderQty; linear:
-// minOrderQty/maxOrderQty/maxMktOrderQty/minNotionalValue), spot has NO
-// launchTime, linear rows carry contractType (keep LinearPerpetual only —
-// dated futures skipped, inverse never fetched: recorded out like COIN-M).
-// Bybit reports NO contract addresses → identity = curated-native /
-// provisional paths until the contract-enrichment worker fills coins
-// addresses. Cursor pagination is PER CATEGORY — cursors never mix.
+// The exchange's instrument catalogue, paginated, into a venue-neutral shape.
+//
+// Two things make this more than a JSON mapping. The size-limit field names
+// differ between the spot and futures categories for the same concept, so each
+// category needs its own reading. And pagination is per category — cursors from
+// one must never be used against another.
+//
+// Dated futures are filtered out; only perpetual contracts are kept. This
+// exchange reports no on-chain contract addresses, so coin identity is resolved
+// elsewhere, from other sources.
 import {
   normalizeDecimalString,
   type InstrumentInfo,
@@ -48,7 +49,8 @@ function parseInstrumentInfo(raw: RawInstrument, marketType: string): Instrument
   put('tick_size', raw.priceFilter?.tickSize);
   put('min_qty', lot?.minOrderQty);
   put('max_limit_qty', lot?.maxOrderQty);
-  // Category dialects (R1): spot maxMarketOrderQty vs linear maxMktOrderQty.
+  // The same limit is spelled differently per category — spot writes it out,
+  // futures abbreviates it.
   put('max_market_qty', lot?.maxMktOrderQty ?? lot?.maxMarketOrderQty);
   // min notional: spot = minOrderAmt (quote), linear = minNotionalValue.
   put(

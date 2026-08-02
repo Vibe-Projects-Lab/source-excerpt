@@ -1,12 +1,14 @@
-// One Bybit v5 public WS connection (copy-adapted from the Binance
-// connection — the working slot/pool machinery is deliberately NOT
-// genericized mid-flight; dedupe task recorded in the tracker). Differences:
-//  - control frames {op:'subscribe'|'unsubscribe', args, req_id} with
-//    {op, success, req_id} acks (req_id is a STRING);
-//  - JSON heartbeat {"op":"ping"} every 20s; the pong ({op:'pong'} or
-//    {ret_msg:'pong'}) counts as a MESSAGE, never as data (idle policy);
-//  - resubscribe pacing 10 args / 250ms (v5 frame cap);
-//  - the WS URL is the full endpoint (no /ws suffix).
+// One upstream WebSocket connection: the streams assigned to it, the control
+// frames that subscribe and unsubscribe them, its heartbeat, and its own
+// reconnect backoff.
+//
+// The pool decides what this connection carries; the connection only sends what
+// it is told and rebuilds its own subscriptions after a reconnect from the set
+// it was assigned — never from whatever the socket happened to be carrying.
+//
+// Venue specifics absorbed here: acknowledged control frames with a string
+// request id, a JSON heartbeat whose reply counts as liveness but never as
+// data, and a cap on how many streams may ride one subscribe frame.
 import WebSocket from 'ws';
 import type { Agent } from 'node:http';
 

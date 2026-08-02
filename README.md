@@ -1,12 +1,19 @@
 # VIBE Screener — source excerpt
 
-**This is a fragment of a production system, not the whole codebase.** VIBE
-Screener is a real-time crypto-derivatives analytics service running at
-[vibescreener.app](https://vibescreener.app), built and operated by a small
-team. What follows is a curated slice of its data plane — about 3 500 lines of
+### What this is, in three sentences
+
+**[VIBE Screener](https://vibescreener.app) is a live product** — a real-time
+analytics service for crypto derivatives, watching every instrument on three
+exchanges at once and putting that in front of a trader as charts, a filterable
+instrument list and cross-exchange signals. **This repository is not the
+product.** It is a curated excerpt of its source code — about 3 500 lines of
 implementation and 1 550 lines of tests — published so that the code can be read
-and evaluated as part of an application to the President Tech Award 2026. See
-[LICENSE](LICENSE).
+and evaluated as part of an application to the President Tech Award 2026, whose
+rules ask applicants to make part of their code available for review.
+
+The running service is at **[vibescreener.app](https://vibescreener.app)**. What
+the whole system looks like, and where these files sit inside it, is in
+[ARCHITECTURE.md](ARCHITECTURE.md). Terms of use are in [LICENSE](LICENSE).
 
 ## This is not a runnable application
 
@@ -135,10 +142,18 @@ reasonably ask about a system like this.
 *"You say three exchanges. What happens when you add a fourth?"*
 
 [`adapters/types.ts`](src/adapters/types.ts) is the entire contract between the
-platform and a venue: eleven members, with capabilities advertised **as data**
-rather than discovered by asking "is this venue X". The rule the file enforces is
-that no exchange-specific code exists anywhere else. Adding a venue is an adapter
-plus a registry row.
+platform and an exchange: eleven members, with capabilities advertised **as
+data** rather than discovered by asking "is this exchange X". The rule the file
+enforces is that no exchange-specific code exists anywhere else, so adding an
+exchange means writing an adapter and registering it — the platform does not
+change.
+
+One honest qualification, since the code says so too: the connection pool for
+this exchange was adapted from the first one rather than factored into something
+shared. The scheduling and idle logic is genuinely the same and belongs in one
+place. That deduplication is a known, deliberately deferred piece of work — the
+boundary that matters held, and moving working connection machinery around
+mid-flight is how you lose data.
 
 [`adapters/bybit/`](src/adapters/bybit) is one complete implementation of that
 contract — dialect, connection, pool, instrument catalogue and a ticker delta

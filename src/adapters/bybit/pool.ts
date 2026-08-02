@@ -1,10 +1,13 @@
-// Bybit connection pool — copy-adapted from BinanceConnectionPool (the slot
-// scheduler / owner map / sweep / idle policy are IDENTICAL logic; dedupe of
-// the two pools is a recorded the tracker task, not a mid-flight refactor).
-// Differences: SUB_BATCH = cfg.maxArgsPerSubscribe (v5: 10), routeMessage
-// switches on the topic prefix (kline. → normalizer loop; tickers. → the
-// aggregation engine — Bybit has no all-market ticker), and the pool OWNS a
-// BybitTickerEngine whose flush emits our platform ticker_arr batches.
+// Many upstream connections presented as one stream source.
+//
+// The pool assigns streams to connections, paces the control frames so the
+// venue's inbound limit is respected, reconciles toward a desired stream set
+// after any disruption, and reports which streams were healed so history can be
+// repaired for exactly those.
+//
+// It also owns the ticker aggregation engine, because this exchange publishes
+// no all-market ticker: per-symbol frames have to be assembled into batches
+// here before anything downstream sees them.
 import { klineStreamName, normalizeKlineFrame } from './dialect.js';
 import { BybitWsConnection } from './connection.js';
 import { BybitTickerEngine } from './ticker-engine.js';
@@ -265,7 +268,8 @@ export class BybitConnectionPool implements VenueStreamSource {
     const klines = normalizeKlineFrame(msg, this.cfg);
     if (klines) {
       // Multi-item frames are REAL (closed bar + new forming in one frame,
-      // R1) — every item is an event; an all-rejected frame is malformed.
+      // Every item in the frame is an event; a frame where all of them fail to
+      // parse is malformed, not empty.
       if (klines.length === 0) {
         this.cb.onMalformed();
         return;

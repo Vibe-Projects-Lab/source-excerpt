@@ -1,24 +1,18 @@
-// The venue seam. An adapter is a Source plus a Normalizer, and one adapter
-// process serves one API DOMAIN — that is, one (exchange, market) pair, because
-// a venue's spot and futures planes have separate endpoints, separate symbol
-// spellings and separate failure modes.
+// The venue boundary.
 //
-// The rule this file exists to enforce: NO exchange-specific code may live
-// outside the adapters directory. Everything the core needs to know about a
-// venue is either in the interface below or in the configuration object it
-// carries. Adding a venue is an adapter plus a registry row.
+// An adapter is a source plus a normalizer, and one adapter serves one API
+// domain: a single (exchange, market) pair. An exchange's spot and futures
+// planes get separate adapters because they are separate systems — different
+// endpoints, different symbol spellings, different limits and different ways
+// of failing.
 //
-// The shapes are stream-type-agnostic from day one: they carry a stream name
-// generically, so candles and tickers are simply the streams that happen to be
-// wired, and order-book depth and trades are reserved values in the same
-// machine rather than a future refactor.
+// The rule this file exists to enforce: no exchange-specific code lives
+// anywhere else. Everything the platform needs to know about an exchange is
+// either in the interface below or in the configuration object it carries.
 //
-// One piece of history worth keeping. The first version of the source contract
-// was `connect(streams)` against a static URL, and it could not subscribe or
-// unsubscribe at runtime. The contract is now a POOL that owns the venue's
-// connections and accepts desired-state deltas. The distinction matters after a
-// reconnect: the desired stream set is the authority, never whatever the live
-// socket happened to be carrying.
+// The shapes carry a stream name generically rather than naming the streams we
+// happen to use, so a new kind of market data is a new value here, not a change
+// to the machinery.
 import type { HotBar, StreamName, TopicKey } from '../core/topics.js';
 import type { RestDispatcher, RestPriority } from '../rest/dispatcher.js';
 import type { RestRole } from '../rest/budget-split.js';
@@ -66,7 +60,8 @@ export interface VenueDomainConfig {
    *  failure produces the very overshoot it exists to prevent; and sharing one
    *  window destroys the only cross-process priority isolation there is. */
   restRoleBudgetPerMin: Record<RestRole, number>;
-  /** Measured steady-state ingest demand floor, in weight per minute. Boot
+  /** The floor this domain's live path is known to need, in weight per minute.
+   *  Boot
    *  asserts that the ingest share still covers it AFTER the dispatcher's own
    *  safety factor, so a future re-split cannot silently starve the hot path.
    *  Only meaningful where demand is a real fraction of the budget — for
@@ -78,11 +73,10 @@ export interface VenueDomainConfig {
   /** Max klines per REST request (the recent-history endpoint). */
   klinesMaxLimit: number;
   /** Venues whose DEEP-history endpoint has a SMALLER page cap than the recent
-   *  one (OKX: /market/candles 300 vs /market/history-candles 100). gap-fill
+   *  one — some exchanges page deep history in smaller chunks. Gap repair
    *  sizes a window to `maxLimit` once its start is older than `horizonMs`, so
-   *  the requested window never exceeds the deep page and no bars are stranded
-   *.
-   *  Absent = the venue's deep and recent caps are the same (Binance/Bybit). */
+   *  the requested window never exceeds the deep page and no bars are stranded.
+   *  Absent = this exchange's deep and recent caps are the same. */
   deepHistory?: { horizonMs: number; maxLimit: number };
   /** [maxLimit, weight] tiers, ascending — weight of a klines call by limit. */
   klinesWeightTiers: readonly (readonly [number, number])[];
@@ -97,11 +91,11 @@ export interface VenueDomainConfig {
   /** Cap on concurrent in-flight REST requests (bounds minute-window bursts
    *  for venues with short rolling limits, e.g. Bybit 600 req/5s). */
   restMaxConcurrent?: number;
-  /** Optional WS proxy URL (http(s):// or socks5://) — geo-fence workaround.
+  /** Optional proxy for the WebSocket connection, for deployments that cannot
    *  REST stays direct (not fenced on the dev network). */
   wsProxyUrl?: string;
   /** The venue's spelling of the BTC/USDT symbol — the corr-vs-BTC anchor
-   *  (ingest-main). Absent = 'BTCUSDT' (Binance/Bybit spelling); OKX spells
+   *  Absent = the common spelling 'BTCUSDT'; some exchanges spell
    *  it 'BTC-USDT' and would otherwise silently never resolve the anchor. */
   btcSymbol?: string;
 }
@@ -138,7 +132,7 @@ export interface NormalizedVenueMetric {
   fundingRate?: number;
   nextFundingMs?: number;
   markPrice?: number;
-  /** Venue-published official index price (a later pass 2026-07-24). */
+  /** The exchange's own published index price. */
   indexPrice?: number;
   oiContracts?: number;
   oiUsd?: number;
@@ -154,7 +148,7 @@ export interface NormalizedVenueMetric {
   ts: number;
 }
 
-/** Pool → host callbacks (moved here from binance/pool.ts at the seam pass). */
+/** What a connection pool reports back to the process that owns it. */
 export interface PoolCallbacks {
   onKline(evt: NormalizedKline): void;
   onTickerArr(items: NormalizedTicker[]): void;
@@ -251,10 +245,11 @@ export interface ExchangeAdapter {
   /** Bulk monthly kline archive, when the venue publishes one. Returns null
    *  when that month does not exist (the normal way to find a listing edge).
    *
-   *  ABSENT on bybit and okx, and that is measured rather than unimplemented:
-   *  Bybit's kline archive stopped in 2024 and rebuilding hours from its tick
-   *  archive costs ~58 GB per symbol against 14 REST requests; OKX returns 404
-   *  on every documented archive path. See venue-endpoint-verification.md.
+   *  Absent on most exchanges, and that is a finding rather than a gap: one
+   *  stopped publishing its candle archive years ago, and rebuilding hours from
+   *  the tick archive it does publish costs orders of magnitude more transfer
+   *  than simply making the ordinary history requests; another returns 404 on
+   *  every archive path it documents.
    *
    *  Does NOT go through the RestDispatcher: a different host, so it spends no
    *  part of the venue weight budget. */
@@ -282,8 +277,9 @@ export interface VenueStreamSource {
   applySubscriptions(add: string[], remove: string[]): void;
   streamCount(): number;
   killConnection(connId: string): boolean;
-  /** Debug hook (dev /debug/fail-connection): simulate a connection FAILURE
-   *  (reassignment path), vs kill (reconnect path). Optional per venue. */
+  /** Test hook: simulate a connection FAILURE, which takes the reassignment
+   *  path, as opposed to a kill, which takes the reconnect path. The two are
+   *  different code paths and both need exercising. Optional per exchange. */
   failConnection?(connId: string): boolean;
   connectionIds(): string[];
   shutdown(): void;

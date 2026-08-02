@@ -1,7 +1,6 @@
-// history-reader: the before-cursor is the load-bearing NEW behavior (the SQL
-// body is unchanged from the proven resolver). We mock the postgres.js client
-// to CAPTURE the query and assert the cutoff = min(floor, before) and the
-// limit/row-number clamp — without a live DB.
+// The cursor is the load-bearing behaviour here. The database client is mocked
+// so the test can capture the query itself and assert the cutoff and the row
+// limit — no live database required.
 import { describe, expect, it } from 'vitest';
 import type { Sql } from 'postgres';
 import { closedTfBars } from './history-reader.js';

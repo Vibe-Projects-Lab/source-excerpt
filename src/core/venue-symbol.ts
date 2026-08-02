@@ -1,12 +1,13 @@
-// Venue-NEUTRAL listing shape, consumed by the coin registry. Producing it from
-// a venue's own instrument-info dialect is adapter work — see the venue's
-// exchange-info module for the other side of this boundary.
+// What a listing looks like once it stops being exchange-shaped.
 //
-// A standing rule about this shape: venue metadata added here applies to ALL
-// market types of a venue by default, spot and perpetual alike, never
-// spot-only. The dialect parse is shared per venue and every API domain runs
-// the same sync, so a new field lands on both markets for free — which also
-// means verification of such a feature has to cover both.
+// Producing this from an exchange's own catalogue is adapter work; everything
+// downstream sees only this.
+//
+// One rule about it is worth stating: metadata added to this shape applies to
+// every market of an exchange by default, spot and perpetual alike. The parse
+// is shared per exchange and every domain runs the same sync, so a new field
+// lands on both markets for free — which also means testing it has to cover
+// both.
 import type { InstrumentInfo } from './instruments.js';
 
 export interface VenueSymbol {
@@ -19,7 +20,7 @@ export interface VenueSymbol {
   network: string | null;
   /** Venue-reported listing time, when the venue has one. */
   listedAt: Date | null;
-  /** + the backlog: NORMALIZED venue metadata destined for
+  /** Normalized exchange metadata destined for
    *  instrument_metadata.instrument_info (tick_size + trading rules) —
    *  {} when the venue reports nothing. Shape owned by shared/instruments.ts. */
   info: InstrumentInfo;

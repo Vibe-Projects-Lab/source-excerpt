@@ -11,13 +11,17 @@ part of an application to the President Tech Award 2026 (IT Park Uzbekistan,
 awards.gov.uz), whose rules require that part of a project's source code be made
 available for review.
 
-Permission is granted to read this code and to evaluate it for that purpose.
+Permission is granted to read this code and to evaluate it for that purpose,
+including cloning this repository, installing its development dependencies, and
+compiling and running its tests locally in order to verify the claims made in
+the README.
 
 No other rights are granted. In particular, and without limitation, you may not
-copy, reproduce, modify, translate, distribute, sublicense, publish, or use this
-code or any part of it in any product, service, model-training corpus, or other
-work, whether commercial or non-commercial, without prior written permission
-from the copyright holders.
+modify, translate, redistribute, publish, sublicense, or use this code or any
+part of it in any product, service, model-training corpus, or other work,
+whether commercial or non-commercial, nor retain a copy for any purpose beyond
+the evaluation described above, without prior written permission from the
+copyright holders.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS

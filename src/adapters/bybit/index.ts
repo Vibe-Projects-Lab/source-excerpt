@@ -1,14 +1,10 @@
-// Bybit v5 API domains (venue #2). ONE REST domain (api.bybit.com), WS
-// endpoints per market — the F4 capability matrix's own description; two
-// ingest processes (spot / linear) match the platform's one-(exchange,
-// market)-per-process model. The ONLY cross-process invariant is the SHARED
-// per-IP REST budget: official cap 600 req/5s = 7200/min; FOUR dispatchers
-// share this IP (2 ingest + 2 jobs) → 1500/min each = 6000/min total, ≈450/5s
-// after the dispatcher's 0.9 safety — 25% headroom. made this split a
-// DECLARED invariant instead of a comment: weightBudgetPerMin now carries the
-// 7200 host budget, restRoleBudgetPerMin the 1500 shares (same deployed
-// numbers, now boot-asserted). Base URLs env-overridable (F4: alternate
-// domains are config).
+// The exchange's two API domains as configuration: endpoints, venue limits,
+// and this domain's share of the shared request budget.
+//
+// Both domains talk to one REST host, which is why they must agree on the host
+// budget and split it explicitly — see budget-split.ts for why that split is
+// declared rather than assumed. Base URLs are overridable by environment so a
+// moved hostname never requires a code change.
 import { loadEnv } from '../../core/env.js';
 import type { VenueDomainConfig } from '../types.js';
 

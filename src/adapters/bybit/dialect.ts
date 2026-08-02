@@ -1,17 +1,20 @@
-// Bybit v5 dialect (own family ) — normalizers + stream names. Facts
-// pinned by a live probe and a review of the raw frames it captured:
-//  - kline topic `kline.{interval}.{SYMBOL}`; `data` is an ARRAY — a minute
-//    boundary can pack [closed(confirm:true), newForming] into ONE frame
-//    (linear) or two frames (spot) → iterate EVERY item, never data[0];
-//  - frame `type` is ALWAYS 'snapshot' for klines — closed-ness comes from
-//    `confirm === true` ONLY; bar ts = `start` (bucket open), NOT `timestamp`;
-//  - o/h/l/c/volume/turnover are strings; volume = BASE units, turnover =
-//    QUOTE units (the swap trap: OUR volume24h field is quote);
-//  - REST /v5/market/kline: {retCode,result:{list}} — rows of 7 strings
-//    [startMs,o,h,l,c,volume,turnover], REVERSE chronological; start/end
-//    select by BUCKET OVERLAP (a bar whose bucket merely contains `start`
-//    is included) → strict ts>=start filter applied here;
-//  - empty-string numerics occur ('' → must parse to NaN, not 0).
+// The exchange's own JSON, normalized into the platform's shapes.
+//
+// This is where a venue's quirks are absorbed so nothing downstream has to know
+// about them. The ones that matter here, each of which is a bug if missed:
+//  - a candle frame carries an ARRAY, and a minute boundary can pack the closed
+//    bar and its successor into one frame — so iterate every item, never the
+//    first;
+//  - the frame's own type field always says "snapshot", so closed-ness comes
+//    from a separate flag, and the bar's timestamp is its bucket open, not the
+//    frame's send time;
+//  - numbers arrive as strings, and volume is in base units while turnover is
+//    in quote units — the platform's volume field is the quote one, so these
+//    two are deliberately swapped on the way in;
+//  - the REST history endpoint returns rows newest-first and selects by bucket
+//    overlap, so a bar whose bucket merely contains the requested start is
+//    included and has to be filtered out;
+//  - an empty string is a legitimate value and must become NaN, not zero.
 import type { TopicKey } from '../../core/topics.js';
 import { tfDurationMs } from '../../core/timeframes.js';
 import type {
@@ -44,7 +47,8 @@ export function tfToInterval(tf: string): string | null {
   return TF_TO_INTERVAL[tf] ?? null;
 }
 
-/** '' and undefined → NaN (Number('') is 0 — the R1 empty-string trap). */
+/** '' and undefined must become NaN. Number('') is 0, which would silently
+ *  turn a missing value into a real price. */
 const num = (v: unknown): number => {
   if (typeof v === 'number') return v;
   if (typeof v !== 'string' || v === '') return NaN;
@@ -149,7 +153,7 @@ export function unwrapEnvelope(body: BybitRestEnvelope, what: string): unknown[]
 /**
  * Parse v5 kline rows → ascending RestKlineBar[]. Rows arrive REVERSE
  * chronological; `sinceMs` applies the strict ts>=start filter (bucket-
- * overlap edge bar — R1 flag #7); `dropFormingAt` drops the unfinished bar.
+ * overlap edge bar); `dropFormingAt` drops the unfinished bar.
  */
 export function parseBybitKlineRows(
   rows: unknown[],

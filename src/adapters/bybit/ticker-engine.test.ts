@@ -1,6 +1,7 @@
-// R1-pinned semantics: linear snapshot→delta merge (present fields only,
-// nextFundingTime only in snapshots), no-emit-before-snapshot, fraction→pct,
-// the volume/turnover SWAP, funding/OI extraction, snapshot reset on resub.
+// Snapshot-then-delta merging: only the fields a delta carries change, nothing
+// is emitted before the first snapshot, the fraction-to-percent conversion, the
+// volume and turnover swap, funding and open-interest extraction, and the reset
+// that follows a resubscribe.
 import { describe, expect, it, vi } from 'vitest';
 import type { NormalizedTicker, NormalizedVenueMetric } from '../types.js';
 import { BybitTickerEngine } from './ticker-engine.js';
@@ -96,7 +97,9 @@ describe('BybitTickerEngine', () => {
     const { engine, tickers, metrics } = collect(true);
     engine.ingest(SNAPSHOT);
     engine.flush();
-    // Partial delta: only lastPrice + OI change (32 distinct field sets).
+    // A partial delta: only the price and open interest change. The exchange
+    // sends dozens of distinct field combinations, so nothing may assume a
+    // fixed shape.
     engine.ingest({
       topic: 'tickers.BTCUSDT',
       type: 'delta',
@@ -112,7 +115,7 @@ describe('BybitTickerEngine', () => {
     expect(m.nextFundingMs).toBe(1784390400000); // snapshot-only field SURVIVES
     expect(m.fundingRate).toBeCloseTo(0.00003777);
     expect(m.markPrice).toBeCloseTo(63930.1);
-    expect(m.indexPrice).toBeCloseTo(63928.4); // E+ 2026-07-24: venue index fact
+    expect(m.indexPrice).toBeCloseTo(63928.4); // the exchange's own index
     engine.stop();
   });
 

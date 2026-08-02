@@ -1,15 +1,13 @@
-// Environment surface for this excerpt.
+// The configuration this excerpt reads.
 //
-// DEVIATION FROM THE PRODUCTION SYSTEM — see README, "What was changed".
-// The real service validates one large environment schema at boot with Zod and
-// fails closed on anything malformed. That schema also carries the settings of
-// the abuse-defence layer, which is out of scope here, so this excerpt declares
-// only the venue endpoint overrides the adapter below actually reads.
+// DEVIATION FROM THE PRODUCTION SYSTEM — see the README. The real service
+// validates one schema at startup and refuses to boot on anything malformed.
+// That schema also carries settings that are out of scope for a public excerpt,
+// so what remains here is only the endpoint overrides this code actually uses.
 //
-// The pattern worth taking from the original is not the parsing: it is that
-// base URLs are configuration. A venue that moves a hostname, or a deployment
-// that has to reach one through a proxy, must never require a code change.
-
+// The pattern worth taking from the original is not the parsing but the rule:
+// base URLs are configuration. An exchange that moves a hostname, or a
+// deployment that must reach one through a proxy, never requires a code change.
 export interface VenueEnv {
   BYBIT_SPOT_WS_BASE?: string;
   BYBIT_LINEAR_WS_BASE?: string;

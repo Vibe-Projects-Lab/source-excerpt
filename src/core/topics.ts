@@ -1,17 +1,21 @@
-// Canonical topic key:
-//   {exchange}:{market_type}:{exchange_symbol}:{stream}[:{tf}]
-// e.g. binance:perpetual:BTCUSDT:kline:1m
-// Stream-type-agnostic from day 1: depth/trades are valid
-// stream names in this same keyspace, just not subscribed in the first release.
-
+// The naming scheme every stream, cache key and channel is derived from:
+//
+//   {exchange}:{market}:{symbol}:{stream}[:{timeframe}]
+//
+// One canonical string, built in one place, so a subscription, a cache entry
+// and a published message can never disagree about what they refer to.
+//
+// The stream name is a value in an open set rather than a fixed list of the
+// streams we currently use, which is what allows a new kind of market data to
+// be added without touching the routing machinery.
 export const STREAM_NAMES = [
   'kline',
   'ticker_arr',
-  'metrics_arr', // S5/C13 market-metrics batch (Std+ policy-gated, Rule 1)
-  'decorr', // cross-venue decorrelation batch (the backlog; global `_cross` topic)
-  'decorr_full', // decorrelation modal full per-venue legs (PRO-gated, global `_cross` topic)
-  'depth', // reserved — wired WITH Density (never subscribed in the first release/1)
-  'trades', // reserved — Splash/Algo/Whale
+  'metrics_arr', // open interest, funding, mark and index prices
+  'decorr', // cross-venue price divergence
+  'decorr_full', // the same, with the per-exchange breakdown
+  'depth', // reserved — order books
+  'trades', // reserved
   'agg_trade', // reserved
 ] as const;
 
@@ -30,10 +34,11 @@ export function topicToString(t: TopicKey): string {
   return t.tf ? `${base}:${t.tf}` : base;
 }
 
-/** The ONE global decorr topic (the backlog): sentinel exchange `_cross`
- *  (the state is cross-venue by definition), market sentinel `all`, symbol
- *  `_all`. Batches carry ONLY decorrelated coins — tiny payload, one
- *  subscription per client. */
+/** The single global topic for cross-exchange divergence. It is cross-venue by
+ *  definition, so the exchange, market and symbol positions carry sentinels
+ *  rather than a real instrument. Batches carry only the coins currently
+ *  diverging, which keeps the payload small and lets a client hold one
+ *  subscription instead of thousands. */
 export const DECORR_TOPIC: TopicKey = {
   exchange: '_cross',
   marketType: 'all',
@@ -41,12 +46,10 @@ export const DECORR_TOPIC: TopicKey = {
   stream: 'decorr',
 };
 
-/** Decorrelation modal's full-legs twin (the product owner 2026-07-22, PRO-gated charts.pro)
- *  — same `_cross`/`all`/`_all` sentinel. RESERVED: the WS topic is no longer
- *  published (the modal now PULLS on demand via the gateway `decorr.legs`
- *  query so it can show ANY coin, gapping or not — the WS timer-batch could
- *  only carry currently-decorrelated coins). The `decorr_full` policy row +
- *  flag are still consumed by that query's tier gate. */
+/** The same state with the per-exchange breakdown, on the same sentinel key.
+ *  RESERVED: this topic is no longer published. A periodic batch could only
+ *  ever carry the coins that were diverging when it was built, so the detailed
+ *  view is fetched on demand instead, which lets it answer for any coin. */
 export const DECORR_FULL_TOPIC: TopicKey = {
   exchange: '_cross',
   marketType: 'all',
@@ -54,10 +57,10 @@ export const DECORR_FULL_TOPIC: TopicKey = {
   stream: 'decorr_full',
 };
 
-/** Redis hash the decorr worker rewrites each tick: field = coins.id, value =
- *  JSON({legs, ts}) — every coin's fresh per-venue prices. The gateway's
- *  `decorr.legs` query HGETs one field per decorrelation modal open. Rewritten via a temp key + RENAME so departed coins prune
- *  and a reader never sees a torn/stale-lingering snapshot. */
+/** Where the current per-exchange prices live, one field per coin, rewritten
+ *  wholesale each tick. The rewrite goes through a temporary key and a rename
+ *  so that coins which stopped diverging are pruned rather than left stale, and
+ *  a reader can never observe a half-written snapshot. */
 export const DECORR_LEGS_HASH = 'decorr:legs';
 
 export function topicFromString(s: string): TopicKey | null {
@@ -69,20 +72,23 @@ export function topicFromString(s: string): TopicKey | null {
   return { exchange, marketType, exchangeSymbol, stream: stream as StreamName, tf };
 }
 
-// Redis channel for the live path (radio) — F2.
+// The live path: one channel per topic.
 export const pubChannel = (topic: string) => `pub:${topic}`;
-// Redis keys for the hot cache + per-topic REQUIRED seq.
-// The closed-bars blob and the forming bar are SEPARATE keys on purpose:
-// the blob (~20 KB) is rewritten only on BAR_CLOSE (1/min/instrument), the
-// tiny forming key on every diff — at 25-35k instruments (the first release) writing
-// the full blob per diff would dominate Redis traffic.
+// The cache that serves a client's first snapshot, plus a sequence number per
+// topic so a client can tell whether it missed a required message.
+//
+// The closed bars and the bar currently forming are separate keys on purpose.
+// The closed-bar blob is rewritten once a minute per instrument; the forming
+// bar changes on every tick. Merging them would mean rewriting the whole blob
+// on every tick, for every instrument — which at this instrument count would
+// dominate all other cache traffic.
 export const hotKey = (topic: string) => `hot:${topic}`;
 export const formingKey = (topic: string) => `hot:${topic}:forming`;
 export const seqKey = (topic: string) => `seq:${topic}`;
 
-// Hot-cache shapes (Redis, snapshot source per F1 attach sequence).
-// Written by ingest, read by fan-out. Compact keys — internal cache format,
-// not a wire format (the wire is the protobuf Envelope).
+// The cache shapes. Written by the ingest side, read by the delivery side.
+// Keys are short because this is an internal cache format, not a wire format —
+// what goes on the wire is a protobuf message.
 export interface HotBar {
   ts: number; // bar open time, UTC ms
   o: number;

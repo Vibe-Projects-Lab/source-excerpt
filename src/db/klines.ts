@@ -1,17 +1,15 @@
-// Hand-written surface for the TimescaleDB candle storage.
+// The stored candle series and the row shape they share.
 //
-// A standing rule: the hypertables and their policies are created ONLY by
-// raw-SQL migration steps and are NEVER modelled in the ORM schema. The schema
-// generator cannot represent a hypertable, and would emit drop-and-recreate
-// diffs against them — which is a data-loss migration written by a tool that
-// believes it is fixing a drift.
+// A standing rule: these tables and their policies are created only by raw SQL
+// migrations and are never modelled in the ORM schema. The schema generator
+// cannot represent a time-series table and would propose dropping and
+// recreating them — a data-loss migration written by a tool that believes it is
+// fixing a drift.
 //
-// All three anchor series are plain hypertables. The hourly and daily ones used
-// to be continuous aggregates over the one-minute series; they now accept
-// direct writes from the roll-up, repair and seed workers, because the
-// one-minute series became a rolling window and an aggregate cannot outlive its
-// source.
-
+// All three series are plain tables. The hourly and daily ones were once
+// materialised views over the minute series; they now take direct writes,
+// because the minute series became a rolling window and a view cannot outlive
+// its source.
 import type { AnchorTimeframe } from '../core/timeframes.js';
 
 export const KLINES_1M_TABLE = 'klines_1m';

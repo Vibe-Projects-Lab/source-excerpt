@@ -1,6 +1,6 @@
-// Fixtures mirror REAL frames captured by a live probe and verified by
-// the the frame review: multi-item close frames, confirm semantics,
-// reverse REST rows, bucket-overlap edge bar, empty-string numerics.
+// Fixtures are real frames captured from the exchange and checked by hand:
+// multi-item close frames, the closed-ness flag, reverse-ordered REST rows, the
+// bucket-overlap edge bar, and empty-string numerics.
 import { describe, expect, it } from 'vitest';
 import {
   klineStreamName,
@@ -108,13 +108,14 @@ describe('bybit dialect — REST klines', () => {
     expect(bars.map((b) => b.ts)).toEqual([1784366940000, 1784367000000]);
   });
 
-  // The kline-storage refactor made the anchor writers fetch 1h/1d from the
-  // venue. The forming-bar guard used to be a hardcoded 60_000, so an hourly
-  // page kept the IN-PROGRESS hour and it would have been persisted as a
-  // closed bar — the corruption Backend 's "Nobody writes 1h/1D" names.
+  // Once the hourly and daily series began to be fetched from the exchange
+  // rather than computed, the forming-bar guard mattered at every timeframe.
+  // It used to be a hard-coded one minute, so an hourly page kept the hour
+  // still in progress and would have stored it as a closed bar — a corrupt
+  // candle that stays corrupt forever.
   describe('forming-bar guard is TF-aware', () => {
     const hourly = [
-      ['1784367600000', '2', '3', '1', '2.5', '10', '0'], // 2026-.. 13:00, still forming
+      ['1784367600000', '2', '3', '1', '2.5', '10', '0'], // 13:00, still forming
       ['1784364000000', '1', '2', '0.5', '1.5', '20', '0'], // 12:00, closed
     ];
 

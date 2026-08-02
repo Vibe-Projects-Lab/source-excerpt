@@ -1,19 +1,19 @@
-// Per-instrument price precision. The instruments table carries an open jsonb
-// column for venue metadata; this module owns the ONE formalised key inside it,
-// so that the writer (the listing sync), the reader (the instrument catalogue
-// endpoint) and the consumer (the chart's price formatter) can never drift on
-// its shape:
+// Per-instrument price precision.
 //
-//   instrument_metadata.instrument_info.tick_size : string   e.g. "0.001"
+// The instrument table carries an open metadata column for whatever an exchange
+// reports about a contract. This module owns the one formalised key inside it,
+// so that the writer, the reader and the consumer that formats prices on a
+// chart cannot drift apart on its shape.
 //
-// tick_size is a DECIMAL STRING exactly as venues quote it (covers 0.25/0.05
-// steps a bare "decimals" integer cannot); display precision derives from it.
-
+// The price step is stored as a decimal string exactly as exchanges quote it,
+// because a plain "number of decimals" integer cannot express steps like 0.25
+// or 0.05. Display precision is derived from it rather than stored separately.
 /** The formalised sub-structure for a venue's trading rules. Decimal fields are
  *  canonical STRINGS; other keys are expected to appear later, so writers must
  *  MERGE into this object and never overwrite siblings they do not know. */
 export interface InstrumentInfo {
-  /** Venue price step ('0.001') — drives chart priceFormat (). */
+  /** The exchange's price step, e.g. '0.001'. Chart price formatting derives
+   *  from it. */
   tick_size?: string;
   /** Min trade amount, base asset (LOT_SIZE.minQty). */
   min_qty?: string;

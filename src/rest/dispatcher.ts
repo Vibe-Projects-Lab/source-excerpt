@@ -1,24 +1,24 @@
-// REST dispatcher. The unit of budget is host(restBase) + outbound IP, not the
-// venue and not the process. The IP pool starts with ONE entry ('primary'):
-// adding an address or an API key later is a configuration row, not a rewrite.
+// Outbound REST requests, kept inside an exchange's rate limit.
 //
-// ⚠ A single dispatcher cannot exceed ITS OWN window by construction — but the
-// venue counts per host and IP across ALL our processes, and more than one
-// process talks to the same venue. So `budgetPerMin` here is this dispatcher's
-// declared SHARE (see budget-split.ts), never the venue's host budget. Handing
-// the full venue number to two processes is how a fleet overshoots a limit it
-// believes it cannot exceed; the split arithmetic is therefore asserted at
-// every boot, so configuration drift crashes a process instead of earning a
-// ban later.
+// The unit of budget is the REST host plus the outbound IP address — not the
+// exchange, and not the process. That distinction is the whole point: an
+// exchange counts every request we make from one address as one client, and
+// more than one of our processes talks to it.
 //
-// Priority classes: 'low' = bulk history sweeps; 'normal' = listing sync, gap
-// healing, cache warmup. Normal always drains first.
+// So the budget here is THIS dispatcher's declared share, never the venue's
+// whole limit. Handing the whole limit to two processes is exactly how a fleet
+// exceeds a ceiling that every process locally believes it cannot exceed. The
+// arithmetic that carves the shares is asserted at startup, so a configuration
+// mistake stops a process rather than earning a ban.
 //
-// Cross-process coordination is deliberately limited to the PAUSE. A 429, 418
-// or 403 is venue ground truth — unlike our own estimated weight table, which
-// is a model — so it is shared over Redis pub/sub (pause-share.ts) and consumed
-// by the existing synchronous `pausedUntil` check. No await ever enters
-// drain(), and a Redis outage degrades to exactly the per-process behaviour.
+// Requests have two priority classes. Bulk history work is 'low' and always
+// yields to 'normal' work such as repairing a gap a user can see.
+//
+// Coordination between processes is deliberately limited to the PAUSE. A
+// rejection from the exchange is ground truth about our address, unlike our own
+// estimate of what we have spent, so only that is shared — and it is applied
+// through the same synchronous check the request loop already performs, so
+// nothing asynchronous ever enters the request path.
 import type { Counter, Gauge } from 'prom-client';
 
 export type RestPriority = 'normal' | 'low';
@@ -37,8 +37,8 @@ export interface DispatcherConfig {
   restBase: string;
   /** THIS dispatcher's weight-per-minute share — roleBudget(cfg, role), never
    *  the venue's whole weightBudgetPerMin. A shared field name once let one
-   *  venue's full number reach two processes at once: a 1.8x overshoot that
-   *  every local invariant reported as healthy. */
+   *  exchange's full number reach two processes at once — an overshoot that
+   *  every local check reported as healthy. */
   budgetPerMin: number;
   /** Fraction of the share the dispatcher permits itself. Alerting pages at
    *  80% utilization, so the default stays under the alarm and leaves headroom

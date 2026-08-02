@@ -1,17 +1,10 @@
-// CHARACTERISATION tests for RestDispatcher — pinning behaviour that had NONE.
+// Characterisation tests: they pin down what the dispatcher does today, so that
+// a future change which alters it fails loudly and someone has to decide
+// whether the change was intended.
 //
-// Written deliberately BEFORE the budget-unit rework: that plan's
-// acceptance criterion is "with no shared budget the behaviour is unchanged",
-// and until now there was no baseline to compare against — the only other
-// mention of RestDispatcher in a test file is a type import. These tests
-// describe what the dispatcher does TODAY. If a future change makes one fail,
-// that is the signal to decide whether the change is intended, not to edit the
-// expectation quietly.
-//
-// The two seams that make this testable without a venue: vitest fake timers for
-// the minute window, and a stubbed global fetch (the dispatcher calls bare
-// `fetch(url)` at dispatcher.ts:156 — there is no injectable client, which is
-// itself worth knowing).
+// Two seams make this testable without an exchange: fake timers for the budget
+// window, and a stubbed global fetch — the dispatcher calls fetch directly and
+// has no injectable client, which is itself worth knowing.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RestDispatcher } from './dispatcher.js';
 import { assertRestBudgetSplit, roleBudget } from './budget-split.js';
@@ -258,15 +251,15 @@ describe('RestDispatcher — budget unit identity', () => {
     // dispatcher — construction goes through roleBudget(cfg, role), and
     // assertRestBudgetSplit fails the boot when Σ shares > host budget. This
     // test is the flipped pin: the same two-process scenario, built the way
-    // ingest-main/jobs-main now build, cannot exceed the venue's 100.
+    // the processes now build their dispatchers, cannot exceed the host's 100.
     const cfg = {
       apiDomain: 'v',
       restBase: BASE,
       weightBudgetPerMin: 200, // the venue HOST budget
-      // THREE roles since the kline-storage refactor: `seed` (anchor backfill)
-      // was carved out of `jobs`, so the host total is unchanged and this test
-      // must exercise all three — a role left out of the scenario is exactly
-      // how a share gets spent without being counted.
+      // THREE roles: the deep-history seed was carved out of the background
+      // worker's share, so the host total is unchanged and this test must
+      // exercise all three — a role left out of the scenario is exactly how a
+      // share gets spent without being counted.
       restRoleBudgetPerMin: { ingest: 120, jobs: 60, seed: 20 },
     } as VenueDomainConfig;
     assertRestBudgetSplit([cfg]); // the boot gate the real processes run

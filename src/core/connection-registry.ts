@@ -1,8 +1,13 @@
-// WS connection registry (F4 "WS connection registry & recovery") — per
-// outbound connection: connection_id, api_domain, outbound_ip_id, ws_url,
-// status, last_ping/pong/message_at, assigned_stream_keys[], counts,
-// reconnect_attempts. In-process state + Prometheus gauges (not a DB table —
-// the spec's Tables 1–19 do not include it).
+// Which upstream connections exist and what each one is carrying.
+//
+// Per connection: where it points, whether it is healthy, when it last heard
+// anything, which streams are assigned to it, and how many times it has
+// reconnected. Held in memory and exported as metrics rather than stored — it
+// describes the current moment, and nothing needs it after a restart.
+//
+// The assigned stream set matters beyond observability: after a disruption it
+// is the authority for what the connection should carry, and the list of
+// streams whose history may need repairing.
 import { Gauge, type Registry } from 'prom-client';
 
 export type ConnectionStatus = 'connecting' | 'open' | 'reconnecting' | 'closed';
@@ -34,13 +39,13 @@ export class ConnectionRegistry {
   ) {
     this.connectionsGauge = new Gauge({
       name: 'vibe_adapter_ws_connections',
-      help: 'Upstream WS connections by status (F4 registry, the ingest domain)',
+      help: 'Upstream WebSocket connections by status',
       labelNames: ['api_domain', 'status'],
       registers: [registry],
     });
     this.streamsGauge = new Gauge({
       name: 'vibe_adapter_streams_assigned',
-      help: 'Streams assigned across the connection pool (F4, the ingest domain)',
+      help: 'Streams assigned across the connection pool',
       labelNames: ['api_domain'],
       registers: [registry],
     });
@@ -77,7 +82,8 @@ export class ConnectionRegistry {
     this.refreshGauges();
   }
 
-  /** Full F4 view incl. assigned_stream_keys[] (reassignment + debugging). */
+  /** The full view, including the assigned stream set — what reassignment and
+   *  any debugging session actually need. */
   snapshot(): (ConnectionInfo & { assignedStreamKeys: string[] })[] {
     return [...this.entries.values()].map((e) => ({
       ...e,

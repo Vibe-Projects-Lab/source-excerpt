@@ -1,7 +1,7 @@
-// The budget-split arithmetic is the fix; these tests are its specification.
-// The deployed configurations are asserted too, through the same factories the
-// processes use, so a new venue or a re-cut that over-commits a shared host
-// fails HERE as well as at boot.
+// The split arithmetic is the fix; these tests are its specification. The
+// deployed configurations are checked too, through the same factories the
+// processes use, so a new exchange or a re-cut that over-commits a shared host
+// fails here as well as at startup.
 import { describe, expect, it } from 'vitest';
 import { assertRestBudgetSplit, restBudgetUnit, roleBudget } from './budget-split.js';
 import type { VenueDomainConfig } from '../adapters/types.js';

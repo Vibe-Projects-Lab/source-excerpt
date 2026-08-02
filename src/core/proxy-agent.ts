@@ -1,9 +1,8 @@
-// Proxy agent selection by URL scheme.
+// Reaching an exchange that is not reachable from the deployment region.
 //
-// A venue whose WebSocket endpoint is unreachable from the deployment region is
-// a configuration problem, not a code problem: the connection layer takes an
-// optional proxy URL and picks the agent from its scheme. Everything else about
-// the connection is identical whether or not a proxy is in play.
+// A blocked endpoint is a configuration problem, not a code problem: the
+// connection layer takes an optional proxy URL and picks the agent from its
+// scheme. Everything else about the connection is identical either way.
 import type { Agent } from 'node:http';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 import { SocksProxyAgent } from 'socks-proxy-agent';

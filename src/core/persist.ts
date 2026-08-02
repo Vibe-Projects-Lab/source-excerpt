@@ -1,14 +1,16 @@
-// Persist-pipeline contract. Server-side only.
+// The contract of the journal — the durable path, as opposed to the live one.
 //
-// Closed one-minute candles ride a bounded Redis Stream from the ingest
-// normalizer — and from the gap-fill library — to a single persist worker,
-// which is the ONLY writer of live candle rows and of the watermark. Exactly
-// one instance of that worker runs; scaling it later means sharding consumers
-// by instrument, never round-robin.
+// Closed one-minute candles ride a bounded stream from the normalizer, and from
+// the repair worker, to a single writer. That writer is the only thing that
+// writes live candle rows and the only thing that advances the watermark, and
+// exactly one instance of it runs. Scaling it later means sharding consumers by
+// instrument, never round-robin, because ordering per instrument is the point.
 //
-// The bulk history backfill is the one exception to the single-writer rule: it
-// inserts BEHIND the watermark and never touches it.
-
+// The bulk history backfill is the one deliberate exception: it inserts behind
+// the watermark and never touches it.
+//
+// The watermark is the cheap answer to "where did we stop", which is what makes
+// repair possible without scanning anything.
 export const PERSIST_STREAM = 'persist:klines_1m';
 export const PERSIST_GROUP = 'persist';
 
@@ -20,9 +22,11 @@ export const PERSIST_GROUP = 'persist';
 export const METRICS_PERSIST_STREAM = 'persist:metrics_1m';
 export const METRICS_PERSIST_GROUP = 'persist-metrics';
 
-/** Durable bootstrap queue: listings sync enqueues new instruments
- *  here (1B); the bootstrap worker consumes newest-first (1E). Bounded like
- *  the persist stream — a lost entry re-enters via verify. */
+/** Durable queue of instruments that need their history built from scratch.
+ *  The listing sync enqueues them; the backfill worker consumes newest first,
+ *  because a freshly listed instrument is the one someone is looking at.
+ *  Bounded like the journal stream: a dropped entry is re-discovered by the
+ *  verification pass, so the bound costs nothing. */
 export const BOOTSTRAP_STREAM = 'bootstrap:queue';
 export const BOOTSTRAP_GROUP = 'bootstrap';
 
@@ -104,8 +108,9 @@ export function watermarkKey(instrumentId: string): string {
 
 /** The watermark SET must be a MAX: an out-of-order writer must never
  *  drag it backwards and re-open a healed gap. Lua keeps the read-modify-write
- *  atomic. Lives here rather than in the persist worker because gave verify
- *  a second writer — a shared invariant needs a shared implementation. */
+ *  atomic. It lives here rather than inside the writer because the
+ *  verification pass became a second writer of the watermark, and a shared
+ *  invariant needs a shared implementation. */
 export const WATERMARK_MAX_LUA = `local c = redis.call('GET', KEYS[1])
 if not c or tonumber(ARGV[1]) > tonumber(c) then redis.call('SET', KEYS[1], ARGV[1]) end`;
 

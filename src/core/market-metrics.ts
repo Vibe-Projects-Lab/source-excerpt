@@ -1,14 +1,13 @@
-// MetricsHub — per-domain market-metrics state (open interest, funding, mark
-// and index prices). Venue pollers merge patches in; the publisher drains
-// full-state batches out on a separate, access-gated topic.
+// Per-domain state for the market metrics that are not candles: open interest,
+// funding, mark and index prices.
 //
-// The separate topic is not a transport detail. Access to this data is decided
-// server-side, and data a subscriber may not have must never be transmitted at
-// all — so it cannot ride the shared ticker frame, which everyone receives.
+// Exchange-specific collection lives in the adapters; this only holds the
+// merged state and hands out full-state batches.
 //
-// Exchange-agnostic on purpose: venue paths and payload shapes live in the
-// adapter legs, never here.
-
+// These batches travel on their own topic rather than riding the shared ticker
+// frame, and that is not a transport detail: access to this data is decided on
+// the server, and data a subscriber may not have must never be sent at all.
+// Putting it on the frame everyone receives would make that impossible.
 export interface MetricValues {
   oiUsd?: number;
   oiContracts?: number;
@@ -17,19 +16,19 @@ export interface MetricValues {
    *  key; OKX: the open-interest channel's own payload ts). The metrics
    *  journal buckets by THIS, never by the shared `ts` — `ts` is touched by
    *  every patch (price ticks included), so a frozen OI under a live ticker
-   *  would otherwise forward-fill the present (). */
+   *  would otherwise forward-fill the present. */
   oiTs?: number;
   fundingRate?: number;
   nextFundingMs?: number;
   /** observation time of the funding fields (same contract as oiTs). */
   fundingTs?: number;
   deals24h?: number;
-  /** Venue-published mark price. Was internal-only (oiUsd input); since the
-   *  a later pass it rides metrics_arr as a published FACT for the
-   *  decorrelation modal. */
+  /** The exchange's own mark price. Originally an internal input used to value
+   *  open interest; it is now published in its own right, because comparing
+   *  prices across exchanges needs each exchange's own reference. */
   markPrice?: number;
-  /** Venue-published official INDEX price (its spot-basket reference) —
-   *  a later pass; perpetual venues only. */
+  /** The exchange's official index price — its own spot-basket reference.
+   *  Perpetual markets only. */
   indexPrice?: number;
   ts: number;
 }

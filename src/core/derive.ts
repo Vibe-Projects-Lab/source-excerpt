@@ -1,14 +1,15 @@
-// Generic timeframe derivation engine. ONE algorithm over the anchor mapping
-// in the timeframes module, with zero per-timeframe branches. It is a pure
-// state machine: the host process wires the Redis and publish side of it.
+// Deriving coarser timeframes from the stored anchor.
 //
-// The aggregation is deliberately identical to what the database would compute:
-//   o = first(o, ts) · h = max(h) · l = min(l) · c = last(c, ts) · v = sum(v)
-// ordered by BAR timestamp, never by arrival order. That equivalence is what
-// lets a chart mix live derived bars with stored history and see one series.
+// One algorithm over the anchor table, with no per-timeframe branches: a new
+// timeframe is a configuration entry, never engine work.
 //
-// This path is transport only. Derived closes feed the fan-out topics and the
-// hot caches; the live ingest path never writes derived timeframes to storage.
+// The aggregation is deliberately identical to what the database would compute
+// for the same bucket — open from the first bar, close from the last, high and
+// low from the extremes, volume summed, ordered by bar time rather than arrival
+// order. That equivalence is what lets a chart show live derived bars and
+// stored history as one continuous series.
+//
+// This is a pure state machine; the process that hosts it owns all the I/O.
 import type { HotBar } from './topics.js';
 import { tfFloor, tfNext, type Timeframe } from './timeframes.js';
 

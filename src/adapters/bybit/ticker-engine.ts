@@ -1,18 +1,18 @@
-// Bybit ticker aggregation engine: the venue has NO all-market ticker topic
-// (F4 matrix, re-verified) — every instrument co-subscribes `tickers.{sym}`
-// and THIS engine aggregates our platform ticker_arr batches. R1-pinned
-// semantics baked in:
-//  - spot frames: type 'snapshot' only (full record each time);
-//  - linear: ONE snapshot on (re)subscribe, then DELTAS carrying ONLY the
-//    changed fields + symbol (32 distinct partial field sets observed) —
-//    merge present fields, NEVER clear absent ones, NEVER emit before the
-//    first snapshot (a delta alone is not a price);
-//  - nextFundingTime arrives ONLY in snapshots — it must survive delta merges;
-//  - price24hPcnt is a FRACTION string ('0.0157' = 1.57%);
-//  - volume24h = BASE units, turnover24h = QUOTE units (the swap: OUR
-//    volume24h field is quote volume);
-//  - funding/OI/markPrice ride these same frames on linear (wsMetrics) —
-//    no REST sweeps for Bybit.
+// Reconstructing full ticker state from partial updates.
+//
+// This exchange has no all-market ticker stream, so every instrument
+// subscribes its own — and on the futures market it sends ONE full snapshot per
+// subscription and then deltas carrying only the fields that changed. That
+// makes three rules load-bearing:
+//  - merge the fields a delta carries, never clear the ones it omits;
+//  - never emit before the first snapshot, because a delta alone is not a
+//    price;
+//  - some fields, such as the next funding time, arrive only in snapshots and
+//    must survive every later merge.
+//
+// Two unit traps are handled here as well: the percentage change arrives as a
+// fraction, and volume and turnover are base and quote units respectively —
+// the platform's volume field is the quote one.
 import type { NormalizedTicker, NormalizedVenueMetric } from '../types.js';
 import { bybitNum as num } from './dialect.js';
 
@@ -24,7 +24,7 @@ interface TickerRecord {
   fundingRate?: string;
   nextFundingTime?: string | number;
   markPrice?: string;
-  indexPrice?: string; // venue's official index — a later pass
+  indexPrice?: string; // the exchange's official index price
   openInterest?: string;
   openInterestValue?: string;
 }

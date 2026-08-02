@@ -1,30 +1,23 @@
-// The budget-unit fix, and a good example of an invariant that was false in a
-// way no local check could see.
+// Who may spend how much of an exchange's rate limit, checked at startup.
 //
-// A venue enforces its REST budget per HOST and outbound IP, not per API
-// domain. A venue's spot and futures domains routinely share one REST host, and
-// our own spot and futures ingest processes are separate — so several of our
-// processes are counted by the venue as one client.
+// This exists because of an invariant that was false in a way no single process
+// could detect. An exchange enforces its limit per host and address; its spot
+// and futures domains usually share one host; and our spot and futures ingest
+// processes are separate. Several of our processes are therefore counted by the
+// exchange as one client, while each of them independently obeys "never exceed
+// the venue budget" and is, on its own, correct.
 //
-// Before this module, "cannot exceed the venue budget by construction" was only
-// true PER PROCESS. One venue's full number was handed to both the ingest and
-// the background worker, a latent 1.8x overshoot that measured 1614 against a
-// 2400 budget in production. Other venues carried a hand-computed split in a
-// configuration comment that nothing verified — and one of those comments had
-// miscounted its own dispatchers: it divided by three where four were deployed,
-// so the real ceiling was 800 per minute against a 600 planning figure.
+// The fix is static and declared rather than negotiated at runtime. Every venue
+// configuration states the host budget and the per-role shares carved out of
+// it, and this module is the single place that checks the sum — at every boot of
+// every process that builds a dispatcher, so configuration drift becomes a
+// crash here instead of a ban later.
 //
-// The fix is STATIC and declared. Every venue configuration states the host
-// budget (`weightBudgetPerMin`) and the per-role shares
-// (`restRoleBudgetPerMin`), and this module is the single place that checks the
-// arithmetic — at every boot of every process that builds a dispatcher, so
-// configuration drift is a crash here rather than a ban from the venue later.
-//
-// A shared dynamic window over Redis was reviewed and rejected. The decisive
-// argument: it requires an await inside the dispatcher's drain loop, which
-// breaks the synchronous window invariants; a partial Redis failure produces
-// exactly the overshoot the scheme exists to prevent; and sharing one window
-// destroys the only cross-process priority isolation the system has.
+// A shared dynamic window over Redis was considered and rejected: it requires
+// an await inside the request loop, which breaks the synchronous accounting; a
+// partial Redis failure produces the very overshoot it exists to prevent; and
+// one shared window destroys the only cross-process priority isolation there
+// is.
 import type { VenueDomainConfig } from '../adapters/types.js';
 
 /** `seed` is the anchor backfill: the workers that walk hourly and daily
@@ -65,10 +58,12 @@ export function restBudgetUnit(restBase: string, outboundIpId = 'primary'): stri
  *  builds a dispatcher — a config drift is a crash at boot, not a silent ban
  *  risk in week two. Checks, per budget unit (host + outbound IP):
  *   1. all domains on the unit declare the SAME host budget;
- *   2. Σ of every dispatcher share on the unit (ingest + jobs per domain)
- *      ≤ the host budget;
- *   3. where a domain declares a measured ingest demand floor, the ingest
- *      share still covers it after the dispatcher's 0.9 safety margin. */
+ *   2. the sum of EVERY role's share, across every domain on the unit, does
+ *      not exceed the host budget — the roles are read from the role table, not
+ *      listed here, because a role omitted from a hand-written list is exactly
+ *      how a share gets spent without being counted;
+ *   3. where a domain declares a known demand floor for its live path, the
+ *      ingest share still covers it after the safety margin. */
 export function assertRestBudgetSplit(cfgs: readonly VenueDomainConfig[]): void {
   const byUnit = new Map<string, VenueDomainConfig[]>();
   for (const cfg of cfgs) {

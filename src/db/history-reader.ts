@@ -1,15 +1,19 @@
-// Closed-bar history reader, shared by two callers that may not import each
-// other: the ingest workers (cache warmup) and the HTTP gateway (the
-// deep-history endpoint behind the client's scroll-back). An import-boundary
-// linter forbids the gateway from reaching into the data-plane package, so the
-// reader lives on the shared side and both sides import it from here.
+// Reading stored candles back.
 //
-// Reads CLOSED bars only, never the in-progress bucket. Anchor timeframes read
-// their relation directly; derived timeframes aggregate the nearest lower
-// anchor, using an aggregation definitionally identical to the one the storage
-// layer would apply. The optional `beforeMs` cursor pages STRICTLY OLDER
-// buckets — an exclusive upper bound, which is what makes the client's
-// scroll-back free of both gaps and duplicates.
+// Shared by two callers that may not import each other — the ingest side, which
+// warms its cache, and the HTTP side, which serves the client's scroll-back. An
+// import-boundary rule forbids one from reaching into the other, so the reader
+// lives on the shared side.
+//
+// Two properties define it. It returns closed bars only, never the bucket
+// currently forming, because a partial bar written anywhere durable is wrong
+// forever. And its cursor pages strictly older buckets through an exclusive
+// upper bound, which is what makes scrolling back free of both gaps and
+// duplicates.
+//
+// Timeframes that are stored read their table directly; the rest aggregate the
+// nearest lower stored series, using the same aggregation the storage layer
+// would apply.
 import type { Sql } from 'postgres';
 import { ANCHOR_RELATION } from './klines.js';
 import { TF_ANCHOR, tfFloor, tfFixedMs, type Timeframe } from '../core/timeframes.js';
@@ -17,8 +21,8 @@ import type { HotBar } from '../core/topics.js';
 
 /** SQL interval literal per fixed-duration TF (anchors included). Calendar TFs
  *  (1w Monday-origin / 1M) are NOT in the active set — they get their
- *  time_bucket forms when activated. Single source: the tf-correctness script
- *  must never carry its own copy. */
+ *  bucket forms when they are. This table is the single source; nothing else
+ *  may carry its own copy of these literals. */
 export const BUCKET_INTERVAL: Partial<Record<Timeframe, string>> = {
   '1m': '1 minute',
   '5m': '5 minutes',
@@ -49,22 +53,21 @@ export function uuidArrayFilter(instrumentIds?: string[]): string {
 }
 
 /**
- * Newest stored bucket start STRICTLY BELOW `beforeMs`, or null when there is
- * nothing older. This is how `/history` distinguishes "the instrument's history
- * ends here" from "there is a hole wider than one scan window".
+ * Newest stored bucket strictly older than the cursor, or null when there is
+ * nothing older at all. This is what lets a caller distinguish "this
+ * instrument's history ends here" from "there is a hole wider than one scan
+ * window".
  *
- * Why a probe and not a blind jump: `closedTfBars` only scans
- * `tfMs · (limit + 2)` back from the cursor, which is 5 h 02 min at 1m. MEASURED
- * on live data — 19 of 20 sampled instruments already carry 1m gaps wider than
- * that, the largest 1 d 11 h 56 m, which would need EIGHT blind jumps to clear.
- * A jump also returns an empty page, and an empty page prepends nothing, so the
- * client's visible-range listener never fires again and the chart simply stops
- * with no message at all.
+ * Why a probe rather than simply jumping back a fixed distance: the page reader
+ * scans a bounded window back from the cursor, and a hole can be wider than
+ * that window. Jumping blindly would need an unpredictable number of attempts,
+ * and each miss returns an empty page. An empty page prepends nothing, so the
+ * client's scroll listener never fires again and the chart stops with no
+ * explanation — a silent failure, which is the worst kind.
  *
- * MEASURED cost on `klines_1m` at 145 641 148 rows / 55 chunks, for an
- * instrument sitting behind that 1 d 11 h gap: planning 12.2 ms, execution
- * 1.5 ms — the ordered append stops at the first chunk holding a row and most
- * branches are never executed.
+ * The probe is cheap despite scanning an open-ended range: the query is an
+ * ordered scan that stops at the first stored row it finds, so almost none of
+ * the range is ever visited.
  */
 export async function newestBucketBefore(
   client: Sql,
@@ -164,15 +167,17 @@ export async function closedTfBars(
     throw new Error(`history-reader: calendar timeframe ${tf} not active`);
   }
 
-  // LIVE-EDGE GUARD (kline-storage refactor). A derived bucket is only real
-  // once its anchor covers the bucket's whole span. While klines_1h was a
-  // continuous aggregate with real-time aggregation that was automatic — the
-  // view computed the missing tail on the fly. It is a plain table now, so the
-  // newest hour exists only after the roll-up tick, and the newest 4h bucket
-  // would otherwise be returned computed from THREE hours. That truncated bar
-  // is not just wrong on screen: ingest-main seeds derived series from this
-  // reader with "DB wins on overlap", so it lands in the hot cache and stays
-  // until the next reseed.
+  // LIVE-EDGE GUARD. A derived bucket is only real once the series it derives
+  // from covers the bucket's whole span. While the hourly series was a
+  // materialised view this was automatic — the view computed the missing tail
+  // on demand. It is a plain table now, so the newest hour exists only after
+  // the roll-up runs, and a four-hour bucket built at that moment would be
+  // computed from three hours of data.
+  //
+  // A truncated bar is worse than a missing one. It is not only wrong on
+  // screen: the ingest side seeds its derived series from this reader and lets
+  // stored data win on overlap, so the wrong bar reaches the cache and stays
+  // there until the next reseed.
   //
   // So: drop a bucket that extends past the anchor's newest bar. Applied ONLY
   //  - to TFs anchored on 1h/1d — the 1m-anchored ones (5m/15m/30m) have the

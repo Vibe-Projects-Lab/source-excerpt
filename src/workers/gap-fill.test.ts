@@ -1,16 +1,17 @@
-// gap-fill must heal a MULTI-PAGE gap completely
-// regardless of the venue's pagination direction. Before the fix it forward-
-// paginated with startMs+limit only: a venue that answers a start-only query
-// with the NEWEST page (OKX/Bybit direction unconfirmed) let the cursor jump to
-// ~now after page 1, stranding older bars as permanent klines_1m holes.
+// A gap wider than one page must fill completely, whichever end of the range
+// the exchange paginates from.
 //
-// A live multi-page heal against the venue is the real proof, but the venue's
-// REST endpoints are not reachable from every network, so this drives
-// the SAME gapFillOne walk against a fake adapter that can paginate either way
-// and asserts: (a) a >1-page gap fills 100% in BOTH directions, (b) NO duplicate
-// and NO one-bar hole at the window seam, (c) an empty/sparse window advances
-// (never stalls). A newest-first venue is exactly the case the old code broke —
-// so this test failing on the pre-fix code IS the regression guard.
+// This is not hypothetical. An earlier version paginated forward from a start
+// time only; against an exchange that answers such a query with the NEWEST
+// page, the cursor jumped to the present after the first page and every older
+// bar was stranded as a permanent hole.
+//
+// A live repair against an exchange is the real proof, but those endpoints are
+// not reachable from every network, so this drives the same walk against a fake
+// adapter that can paginate either way, and asserts three things: a multi-page
+// gap fills completely in both directions, there is neither a duplicate nor a
+// one-bar hole at the seam between pages, and a sparse window advances instead
+// of stalling.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Redis } from 'ioredis';
 import { gapFillInstruments, type GapFillDeps } from './gap-fill.js';
@@ -142,10 +143,10 @@ describe('gap-fill — multi-page gap heals in both pagination directions', () =
   }
 });
 
-//: a BOUNDED target — {sinceMs, untilMs} from the close
+// A BOUNDED target — {sinceMs, untilMs} from the close
 // contiguity check — must fetch the hole and ONLY the hole. The trap the bound
 // exists for: without untilMs a past-hole cursor walks since → now and
-// re-fetches days per instrument (the 6M-bar / ~97%-duplicate mechanism).
+// re-fetches days per instrument, almost all of it already stored.
 describe('gap-fill — bounded hole targets', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -223,7 +224,7 @@ describe('gap-fill — bounded hole targets', () => {
 // page SMALLER than its recent one (OKX: 100 vs 300) must have its gap-fill window
 // sized to the deep cap once the window is older than the horizon — else a wide
 // window over-reaches the page and strands the window's oldest bars (silent hole).
-describe('gap-fill Deep-history paging: — window sized to the deep page cap', () => {
+describe('gap-fill deep-history paging — window sized to the deep page cap', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(NOW);
@@ -234,7 +235,7 @@ describe('gap-fill Deep-history paging: — window sized to the deep page cap', 
   const DEEP_CAP = 50;
 
   /** OKX-like: newest-first, AND on a DEEP window (endMs older than the horizon)
-   *  the venue serves a smaller page (DEEP_CAP), exactly like /history-candles. */
+   *  the exchange serves a smaller page, which is how deep history is paged. */
   function fakeOkxAdapter(venue: RestKlineBar[]): ExchangeAdapter {
     const cfg = {
       apiDomain: 'fake-okx',

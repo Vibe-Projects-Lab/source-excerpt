@@ -1,5 +1,5 @@
-// instruments-info dialect: per-category key differences (R1), contractType
-// filter, cursor pagination, launchTime, Trading→active mapping.
+// The instrument catalogue dialect: per-category field-name differences, the
+// contract-type filter, cursor pagination, listing time, and status mapping.
 import { describe, expect, it, vi } from 'vitest';
 import type { RestDispatcher } from '../../rest/dispatcher.js';
 import { bybitDomainConfig } from './index.js';

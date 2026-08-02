@@ -1,21 +1,18 @@
-// Share the PAUSE, not the budget.
+// Share the pause, not the budget.
 //
-// A 429, 418 or 403 is the venue's own verdict about our host and IP. That
-// makes it the one signal genuinely safe to share across processes: our weight
-// table is a model of the venue's accounting and can be wrong, but a rejection
-// is ground truth. Publish {host, until} on Redis pub/sub; peers max-merge it
-// into their dispatcher's existing synchronous `pausedUntil` check.
+// A rate-limit rejection from an exchange is the exchange's own verdict about
+// our address. That makes it the one signal genuinely safe to share between
+// processes: our accounting of what we have spent is a model and can be wrong,
+// but a rejection is a fact. The pause is published, and peers merge it into
+// the check their request loop already performs.
 //
-// Nothing asynchronous enters the request path. If Redis is down the publish is
-// dropped and every process degrades to exactly its per-process behaviour,
-// which is what it did before this file existed. That is the whole reason this
-// was preferred to a shared budget window — see the budget-split.ts header for
-// why the shared window was rejected.
+// Nothing asynchronous enters the request path. If the message bus is
+// unavailable the publish is dropped and every process falls back to exactly
+// its own local behaviour, which is what it did before this file existed.
 //
-// There is an intra-process bonus worth noting: one worker may run several
-// dispatchers against the same REST host, because a venue's spot and futures
-// domains often share one. Routing the pause by host pauses the sibling too,
-// which a per-dispatcher pause never did.
+// One process may run several dispatchers against the same host, because an
+// exchange's spot and futures domains usually share one. Routing the pause by
+// host therefore pauses the sibling too.
 import type { Redis } from 'ioredis';
 import type { RestDispatcher } from './dispatcher.js';
 

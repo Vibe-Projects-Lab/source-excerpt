@@ -1,3 +1,5 @@
+// Derivation must agree with what the database would compute for the same
+// bucket, regardless of the order bars arrive in.
 import { describe, expect, it } from 'vitest';
 import type { HotBar } from './topics.js';
 import { TfDeriver, aggregateBars, foldBar, aggToBar } from './derive.js';

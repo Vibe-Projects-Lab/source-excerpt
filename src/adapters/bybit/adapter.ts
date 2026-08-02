@@ -1,7 +1,10 @@
-// Bybit ExchangeAdapter bundle (venue #2). Capabilities: deals24h=false (v5
-// tickers carry no trade count — the Deals column stays presence-absent),
-// wsMetrics=true (funding/OI/markPrice ride the tickers stream → pool
-// onMetrics; NO startMetricsPolls), kline1s=false (no seconds klines).
+// The exchange's implementation of the adapter interface, assembled from the
+// dialect, the connection pool and the instrument catalogue.
+//
+// Capabilities are declared as data rather than discovered by asking "is this
+// exchange X": this venue carries funding and open interest on its ticker
+// stream, so it needs no separate REST polling for them; it publishes no trade
+// count and no sub-minute candles.
 import type {
   ExchangeAdapter,
   RestKlinesPage,
@@ -50,7 +53,7 @@ export function bybitAdapter(apiDomain: string): ExchangeAdapter {
       return {
         bars: parseBybitKlineRows(rows, {
           tf: req.tf ?? '1m',
-          // Bucket-overlap edge bar (R1 #7): keep strict ts>=start semantics
+          // Bucket-overlap edge bar: keep strict ts>=start semantics
           // so the platform cursors never double-count the edge bucket.
           ...(req.startMs !== undefined ? { sinceMs: req.startMs } : {}),
           ...(req.dropFormingAt !== undefined ? { dropFormingAt: req.dropFormingAt } : {}),

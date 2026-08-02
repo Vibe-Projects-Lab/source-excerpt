@@ -1,15 +1,15 @@
-// Timeframe registry + boundary math.
-// Client-safe: no env, no node imports.
+// Which timeframe derives from which stored anchor, and where each bucket
+// starts. No environment, no platform imports — this file is safe on the client
+// too, and both sides must agree on bucket boundaries or a chart will disagree
+// with the database.
 //
-// The FULL anchor mapping is encoded here, so derivation is one
-// generic "nearest lower anchor" algorithm over this table — enabling a new
-// TF later is a config change, never engine work. the first release actively serves
-// ACTIVE (Build Plan STAGE-1 scope line); the rest are valid but unwired.
+// The full mapping lives here so derivation stays one generic "nearest lower
+// anchor" algorithm over a table. Adding a timeframe is an entry here.
 //
-// Tokens follow the Binance kline convention ('1m' minute vs '1M' month —
-// case carries meaning). Calendar boundaries (documented defaults, spec is
-// silent): 1w = Monday 00:00 UTC (matches Binance weekly), 1d/1M = UTC.
-
+// Timeframe tokens follow the widespread exchange convention where case carries
+// meaning: a lowercase minute token and an uppercase month token are different
+// things. Calendar boundaries are fixed deliberately: weeks start Monday
+// 00:00 UTC, days and months are UTC.
 export const TIMEFRAMES = [
   '1m',
   '5m',
@@ -27,7 +27,8 @@ export const TIMEFRAMES = [
 
 export type Timeframe = (typeof TIMEFRAMES)[number];
 
-/** Anchor series that are STORED (1m raw + 1h/1D continuous aggregates). */
+/** The series that are physically stored; every other timeframe is derived
+ *  from the nearest one below. */
 export type AnchorTimeframe = '1m' | '1h' | '1d';
 
 /** 5m/15m/30m ← 1m; 2h/4h/6h/12h ← 1h; 1W/1M ← 1D. Anchors ← themselves. */
@@ -54,9 +55,9 @@ export function isAnchor(tf: Timeframe): boolean {
   return TF_ANCHOR[tf] === tf;
 }
 
-/** Stage-1 actively-served set (Build Plan: "kline_1m (+ server-derived
- *  5m/15m/1h/4h/1D)"). Server processes may override via ACTIVE_TIMEFRAMES
- *  env; the override must be a subset of TIMEFRAMES. */
+/** The set actually served today: the stored minute series plus the
+ *  timeframes derived from it. A deployment may narrow this by configuration,
+ *  but never widen it beyond the table above. */
 export const DEFAULT_ACTIVE_TIMEFRAMES: readonly Timeframe[] = [
   '1m',
   '5m',
@@ -117,8 +118,8 @@ export function tfFixedMs(tf: Timeframe): number | undefined {
   return FIXED_MS[tf];
 }
 
-/** Seconds pass-through set") — never
- *  persisted, but venue REST/WS still speaks these tokens. */
+/** Sub-minute tokens, passed through but never stored — exchanges still speak
+ *  them, so the parser has to understand them. */
 const SECONDS_MS: Record<string, number> = {
   '1s': 1_000,
   '5s': 5_000,
