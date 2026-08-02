@@ -135,7 +135,7 @@ export class BybitConnectionPool implements VenueStreamSource {
     this.owner.clear();
   }
 
-  // --- slot scheduler (wall-clock phased: Date.now()%1000 — ) ---
+  // --- slot scheduler (phased against the wall clock: Date.now() % 1000) ---
 
   private scheduleSlot(): void {
     if (this.stopped) return;
