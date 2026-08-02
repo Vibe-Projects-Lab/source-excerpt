@@ -8,7 +8,21 @@ implementation and 1 550 lines of tests — published so that the code can be re
 and evaluated as part of an application to the President Tech Award 2026. See
 [LICENSE](LICENSE).
 
-Everything here compiles and its tests pass on their own:
+## This is not a runnable application
+
+Please read this before cloning, so that nothing here is mistaken for a broken
+build.
+
+**You cannot start this.** There is no entry point, no server, no `main` and no
+`start` script — deliberately. Running the real service takes twelve
+long-running processes, a PostgreSQL instance with the TimescaleDB extension, a
+Redis instance, a database schema built by twenty migrations, and live
+credentials at several exchanges. None of that is published, so nothing here is
+wired to a runtime. These are **libraries and their tests**, lifted out of the
+running system.
+
+**What you can do is compile it and run its tests**, which is how it should be
+evaluated:
 
 ```
 npm install
@@ -16,7 +30,12 @@ npm run typecheck   # tsc --noEmit, strict
 npm test            # 77 tests, 9 files
 ```
 
-No database, no Redis and no network access are required to run them.
+No database, no Redis, no network access and no credentials are required. The
+tests are the honest demonstration: they exercise the same code the production
+service runs, against recorded venue frames and fake clients.
+
+Start with [ARCHITECTURE.md](ARCHITECTURE.md) if you want to know what the whole
+system looks like and where these files sit inside it.
 
 ---
 
@@ -52,6 +71,56 @@ flowchart LR
 The excerpt covers the shaded middle of that picture: how we talk to an
 exchange, how we stay inside its rate limits, how candles are derived and
 repaired, and how history is read back.
+
+---
+
+## Every file, in one line each
+
+Thirty-three files. Nine of them are tests, and they sit next to what they test.
+
+**`src/adapters/` — the venue boundary**
+
+| File | |
+|---|---|
+| `types.ts` | the entire contract between the platform and an exchange — read this first |
+| `bybit/index.ts` | the venue's two domains as configuration: endpoints, limits, budget shares |
+| `bybit/adapter.ts` | the venue's implementation of the contract, assembled from the parts below |
+| `bybit/dialect.ts` | the venue's own JSON, normalised — where "is this bar closed" is answered |
+| `bybit/connection.ts` | one upstream socket: its stream set, its control frames, its own backoff |
+| `bybit/pool.ts` | many sockets as one: assignment, pacing, and reconciling toward a desired state |
+| `bybit/ticker-engine.ts` | the venue sends partial ticker deltas; this reconstructs full state from them |
+| `bybit/exchange-info.ts` | the venue's instrument catalogue, paginated, into a venue-neutral shape |
+
+**`src/rest/` — outbound request budget**
+
+| File | |
+|---|---|
+| `dispatcher.ts` | a weight-budgeted, priority-aware request queue with venue-driven pauses |
+| `budget-split.ts` | who may spend how much of a venue's limit, asserted at every boot |
+| `pause-share.ts` | one process gets rate-limited; the others need to know within milliseconds |
+
+**`src/workers/` and `src/db/` — history**
+
+| File | |
+|---|---|
+| `workers/gap-fill.ts` | detect a hole in stored history and repair it, idempotently |
+| `db/history-reader.ts` | read closed bars back, paging strictly older with a cursor |
+| `db/klines.ts` | the three anchor series and the row shape they share |
+
+**`src/core/` — the shared vocabulary**
+
+| File | |
+|---|---|
+| `topics.ts` | the naming scheme every stream, cache key and channel is derived from |
+| `timeframes.ts` | which timeframe derives from which anchor, and where each bucket starts |
+| `derive.ts` | the derivation itself: one algorithm, no per-timeframe branches |
+| `persist.ts` | the contract of the journal — streams, watermarks, bounded writes |
+| `market-metrics.ts` | per-domain state for open interest, funding, mark and index prices |
+| `instruments.ts` | one formalised key inside an open metadata column, so three consumers agree |
+| `venue-symbol.ts` | what a listing looks like once it stops being venue-shaped |
+| `connection-registry.ts` | which upstream sockets exist and what each is carrying |
+| `proxy-agent.ts` | reaching a venue that is unreachable from the deployment region |
+| `env.ts` | the narrow configuration surface this excerpt reads (see below) |
 
 ---
 
