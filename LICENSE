@@ -1,0 +1,27 @@
+All rights reserved.
+
+Copyright (c) 2026 the VIBE Screener authors.
+
+This repository contains selected excerpts from the source code of VIBE
+Screener, a commercial real-time crypto-derivatives analytics service operated
+at vibescreener.app.
+
+It is published for ONE purpose: to allow the code to be read and evaluated as
+part of an application to the President Tech Award 2026 (IT Park Uzbekistan,
+awards.gov.uz), whose rules require that part of a project's source code be made
+available for review.
+
+Permission is granted to read this code and to evaluate it for that purpose.
+
+No other rights are granted. In particular, and without limitation, you may not
+copy, reproduce, modify, translate, distribute, sublicense, publish, or use this
+code or any part of it in any product, service, model-training corpus, or other
+work, whether commercial or non-commercial, without prior written permission
+from the copyright holders.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.

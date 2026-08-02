@@ -1,0 +1,28 @@
+{
+  "name": "vibe-screener-excerpt",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Selected subsystems from the VIBE Screener data plane, published for evaluation",
+  "engines": {
+    "node": ">=20.19"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "https-proxy-agent": "^7.0.0",
+    "ioredis": "^5.4.0",
+    "postgres": "^3.4.5",
+    "prom-client": "^15.1.0",
+    "socks-proxy-agent": "^8.0.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.0",
+    "@types/ws": "^8.5.0",
+    "typescript": "^5.6.0",
+    "vitest": "^3.0.0"
+  }
+}
