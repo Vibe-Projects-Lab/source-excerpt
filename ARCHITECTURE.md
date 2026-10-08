@@ -11,7 +11,7 @@ explains the excerpt.
 
 ## 1. What the product does
 
-VIBE Screener is a real-time analytics service for crypto derivatives. It watches
+Vibe Screener is a real-time analytics service for crypto derivatives. It watches
 every instrument on several exchanges at once, keeps a continuous history of
 them, and puts that in front of a trader as charts, a filterable instrument list,
 and cross-venue signals.

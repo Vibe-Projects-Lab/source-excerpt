@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Selected subsystems from the VIBE Screener data plane, published for evaluation",
+  "description": "Selected subsystems from the Vibe Screener data plane, published for evaluation",
   "engines": {
     "node": ">=20.19"
   },

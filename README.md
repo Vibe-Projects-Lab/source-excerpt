@@ -1,8 +1,8 @@
-# VIBE Screener — source excerpt
+# Vibe Screener — source excerpt
 
 ### What this is, in three sentences
 
-**[VIBE Screener](https://vibescreener.app) is a live product** — a real-time
+**[Vibe Screener](https://vibescreener.app) is a live product** — a real-time
 analytics service for crypto derivatives, watching every instrument on three
 exchanges at once and putting that in front of a trader as charts, a filterable
 instrument list and cross-exchange signals. **This repository is not the
