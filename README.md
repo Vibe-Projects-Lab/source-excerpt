@@ -7,9 +7,8 @@ analytics service for crypto derivatives, watching every instrument on three
 exchanges at once and putting that in front of a trader as charts, a filterable
 instrument list and cross-exchange signals. **This repository is not the
 product.** It is a curated excerpt of its source code — about 3 500 lines of
-implementation and 1 550 lines of tests — published so that the code can be read
-and evaluated as part of an application to the President Tech Award 2026, whose
-rules ask applicants to make part of their code available for review.
+implementation and 1 550 lines of tests — published so that the code behind a
+live product can be read and evaluated.
 
 The running service is at **[vibescreener.app](https://vibescreener.app)**. What
 the whole system looks like, and where these files sit inside it, is in

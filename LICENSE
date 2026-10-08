@@ -6,10 +6,8 @@ This repository contains selected excerpts from the source code of VIBE
 Screener, a commercial real-time crypto-derivatives analytics service operated
 at vibescreener.app.
 
-It is published for ONE purpose: to allow the code to be read and evaluated as
-part of an application to the President Tech Award 2026 (IT Park Uzbekistan,
-awards.gov.uz), whose rules require that part of a project's source code be made
-available for review.
+It is published for ONE purpose: to allow the code to be read and evaluated by
+people reviewing the work of its authors.
 
 Permission is granted to read this code and to evaluate it for that purpose,
 including cloning this repository, installing its development dependencies, and
